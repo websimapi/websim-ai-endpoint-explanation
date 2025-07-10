@@ -9,7 +9,7 @@
   pre { background-color: #e9e9e9; padding: 15px; border-radius: 5px; overflow-x: auto; margin-bottom: 20px; }
   code { font-family: monospace; }
   .explanation { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 30px; }
-  .chat-container {
+  .example-container {
     background-color: #fff;
     padding: 20px;
     border-radius: 8px;
@@ -17,9 +17,9 @@
     max-width: 600px;
     margin: 20px auto;
   }
-  .chat-output {
+  .output-area {
     border: 1px solid #ddd;
-    min-height: 150px;
+    min-height: 50px;
     max-height: 300px;
     overflow-y: auto;
     padding: 10px;
@@ -47,6 +47,10 @@
     border-radius: 4px;
     margin-right: 10px;
   }
+  input[type="file"] {
+    padding: 5px;
+    margin-bottom: 10px;
+  }
   button {
     padding: 10px 15px;
     background-color: #007bff;
@@ -61,6 +65,17 @@
   button:disabled {
     background-color: #cccccc;
     cursor: not-allowed;
+  }
+  .image-preview {
+    max-width: 100%;
+    height: auto;
+    margin-top: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
+  audio {
+    width: 100%;
+    margin-top: 10px;
   }
 </style>
 </head>
@@ -81,7 +96,7 @@
         <li><code>role: "assistant"</code>: (Not typically sent by you in the request, but often added to history after the AI responds) The AI's previous responses.</li>
       </ul>
     </li>
-    <li><strong><code>content: "Your text here"</code></strong>: The actual text of the message.</li>
+    <li><strong><code>content: "Your text here"</code></strong>: The actual text of the message. This can be a string or an array of objects for multimodal input (e.g., text and images).</li>
     <li><strong><code>json: true</code></strong>: (Optional) If you want the AI to respond with a structured JSON object, set this to <code>true</code> and ensure your system message guides the AI to output valid JSON following a schema you provide.</li>
   </ul>
   <p>When you call <code>create</code>, the AI processes the messages array and generates a response based on the conversation context and its training. The response's content will be available in <code>completion.content</code>.</p>
@@ -89,10 +104,52 @@
 
 <h2>JavaScript Example: Simple AI Chat</h2>
 
-<div class="chat-container">
-  <div class="chat-output" id="chatOutput"></div>
+<div class="example-container">
+  <h3>Basic Conversation</h3>
+  <div class="output-area chat-output" id="chatOutput"></div>
   <input type="text" id="chatInput" placeholder="Type your message...">
   <button id="sendButton">Send</button>
+</div>
+
+<h2>JavaScript Example: JSON Output</h2>
+
+<div class="example-container">
+  <h3>Structured Data from Text</h3>
+  <p>Ask the AI to combine concepts into a JSON object with a concept and an emoji.</p>
+  <input type="text" id="jsonInput" placeholder="e.g., 'sun + moon'">
+  <button id="sendJsonButton">Get JSON</button>
+  <div class="output-area" id="jsonOutput"></div>
+</div>
+
+<h2>JavaScript Example: Image Input + JSON Output</h2>
+
+<div class="example-container">
+  <h3>Analyze Image with JSON</h3>
+  <p>Upload an image and ask the AI to determine if it's a natural photograph of an animal.</p>
+  <input type="file" id="imageFileInput" accept="image/*">
+  <img id="imagePreview" class="image-preview" src="" alt="Image Preview" style="display: none;">
+  <button id="analyzeImageButton" disabled>Analyze Image</button>
+  <div class="output-area" id="imageJsonOutput"></div>
+</div>
+
+<h2>JavaScript Example: AI Image Generation</h2>
+
+<div class="example-container">
+  <h3>Generate an Image</h3>
+  <p>Describe an image you want the AI to create.</p>
+  <input type="text" id="imageGenInput" placeholder="e.g., 'a serene forest with a hidden waterfall'">
+  <button id="generateImageButton">Generate Image</button>
+  <img id="generatedImage" class="image-preview" src="" alt="Generated Image" style="display: none;">
+</div>
+
+<h2>JavaScript Example: Text to Speech</h2>
+
+<div class="example-container">
+  <h3>Convert Text to Audio</h3>
+  <p>Enter text and hear the AI speak it aloud.</p>
+  <input type="text" id="ttsInput" placeholder="e.g., 'Hello, world! How are you today?'">
+  <button id="speakButton">Speak</button>
+  <audio id="ttsAudio" controls style="display: none;"></audio>
 </div>
 
 <script type="importmap">
@@ -103,6 +160,7 @@
 }
 </script>
 <script type="module">
+  // --- Chat Example (Existing) ---
   let conversationHistory = [];
   const chatInput = document.getElementById('chatInput');
   const sendButton = document.getElementById('sendButton');
@@ -172,9 +230,214 @@
 
   // Display initial welcome message
   addMessageToChat("Hello! How can I help you today?", 'ai');
+
+  // --- JSON Output Example ---
+  const jsonInput = document.getElementById('jsonInput');
+  const sendJsonButton = document.getElementById('sendJsonButton');
+  const jsonOutput = document.getElementById('jsonOutput');
+
+  sendJsonButton.addEventListener('click', async () => {
+    const userInput = jsonInput.value.trim();
+    if (!userInput) {
+      jsonOutput.textContent = "Please enter some concepts.";
+      return;
+    }
+
+    sendJsonButton.disabled = true;
+    jsonOutput.textContent = "Generating JSON...";
+
+    try {
+      const completion = await websim.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: `Combine the following concepts into a single, coherent idea.
+Respond directly with JSON, following this JSON schema, and no other text.
+{
+  "concept": string;
+  "emoji": string;
+}`,
+          },
+          {
+            role: "user",
+            content: `concepts: ${userInput}`,
+          },
+        ],
+        json: true, // Request JSON output
+      });
+
+      const result = JSON.parse(completion.content);
+      jsonOutput.innerHTML = `<strong>Concept:</strong> ${result.concept}<br><strong>Emoji:</strong> ${result.emoji}`;
+
+    } catch (error) {
+      console.error("Error generating JSON:", error);
+      jsonOutput.textContent = "Error generating JSON. Please try again.";
+    } finally {
+      sendJsonButton.disabled = false;
+    }
+  });
+
+  // --- Image Input + JSON Output Example ---
+  const imageFileInput = document.getElementById('imageFileInput');
+  const imagePreview = document.getElementById('imagePreview');
+  const analyzeImageButton = document.getElementById('analyzeImageButton');
+  const imageJsonOutput = document.getElementById('imageJsonOutput');
+  let imageDataUrl = null; // Store the data URL of the selected image
+
+  imageFileInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        imageDataUrl = e.target.result;
+        imagePreview.src = imageDataUrl;
+        imagePreview.style.display = 'block';
+        analyzeImageButton.disabled = false; // Enable button once image is loaded
+      };
+      reader.readAsDataURL(file);
+    } else {
+      imageDataUrl = null;
+      imagePreview.src = '';
+      imagePreview.style.display = 'none';
+      analyzeImageButton.disabled = true;
+      imageJsonOutput.textContent = '';
+    }
+  });
+
+  analyzeImageButton.addEventListener('click', async () => {
+    if (!imageDataUrl) {
+      imageJsonOutput.textContent = "Please select an image first.";
+      return;
+    }
+
+    analyzeImageButton.disabled = true;
+    imageJsonOutput.textContent = "Analyzing image...";
+
+    try {
+      const completion = await websim.chat.completions.create({
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Determine if the image is a natural photograph of an animal.
+Respond directly with JSON, following this JSON schema, and no other text.
+{
+  "isPhotograph": boolean;
+  "isAnimal": boolean;
+  "isInNature": boolean;
+}`,
+              },
+              {
+                type: "image_url",
+                image_url: { url: imageDataUrl },
+              },
+            ],
+          },
+        ],
+        json: true, // Request JSON output
+      });
+
+      const result = JSON.parse(completion.content);
+      imageJsonOutput.innerHTML = `
+        <strong>Is Photograph:</strong> ${result.isPhotograph}<br>
+        <strong>Is Animal:</strong> ${result.isAnimal}<br>
+        <strong>Is In Nature:</strong> ${result.isInNature}
+      `;
+
+    } catch (error) {
+      console.error("Error analyzing image:", error);
+      imageJsonOutput.textContent = "Error analyzing image. Please try again.";
+    } finally {
+      analyzeImageButton.disabled = false;
+    }
+  });
+
+  // --- AI Image Generation Example ---
+  const imageGenInput = document.getElementById('imageGenInput');
+  const generateImageButton = document.getElementById('generateImageButton');
+  const generatedImage = document.getElementById('generatedImage');
+
+  generateImageButton.addEventListener('click', async () => {
+    const prompt = imageGenInput.value.trim();
+    if (!prompt) {
+      generatedImage.style.display = 'none';
+      generatedImage.src = '';
+      alert("Please enter a prompt for the image.");
+      return;
+    }
+
+    generateImageButton.disabled = true;
+    generatedImage.style.display = 'none'; // Hide previous image
+    generatedImage.src = ''; // Clear previous image
+    generatedImage.alt = 'Generating...'; // Placeholder text
+
+    try {
+      // Show a loading indicator (you might add a text message too)
+      generatedImage.style.display = 'block';
+      generatedImage.alt = 'Generating image... Please wait.';
+
+      const result = await websim.imageGen({
+        prompt: prompt,
+        aspect_ratio: "16:9", // Example aspect ratio
+      });
+
+      generatedImage.src = result.url;
+      generatedImage.alt = prompt; // Set alt text to the prompt
+      generatedImage.style.display = 'block';
+
+    } catch (error) {
+      console.error("Error generating image:", error);
+      generatedImage.style.display = 'none';
+      alert("Error generating image. Please try again.");
+    } finally {
+      generateImageButton.disabled = false;
+    }
+  });
+
+  // --- Text to Speech Example ---
+  const ttsInput = document.getElementById('ttsInput');
+  const speakButton = document.getElementById('speakButton');
+  const ttsAudio = document.getElementById('ttsAudio');
+
+  speakButton.addEventListener('click', async () => {
+    const textToSpeak = ttsInput.value.trim();
+    if (!textToSpeak) {
+      ttsAudio.style.display = 'none';
+      ttsAudio.src = '';
+      alert("Please enter some text to speak.");
+      return;
+    }
+
+    speakButton.disabled = true;
+    ttsAudio.style.display = 'none'; // Hide audio player while generating
+    ttsAudio.src = ''; // Clear previous audio
+
+    try {
+      // Show a loading indicator
+      ttsInput.placeholder = "Generating speech... Please wait.";
+
+      const result = await websim.textToSpeech({
+        text: textToSpeak,
+        voice: "en-male", // Example voice
+      });
+
+      ttsAudio.src = result.url;
+      ttsAudio.style.display = 'block';
+      ttsAudio.play(); // Auto-play the generated speech
+
+    } catch (error) {
+      console.error("Error generating speech:", error);
+      ttsAudio.style.display = 'none';
+      alert("Error generating speech. Please try again.");
+    } finally {
+      speakButton.disabled = false;
+      ttsInput.placeholder = "e.g., 'Hello, world! How are you today?'"; // Restore placeholder
+    }
+  });
 </script>
 
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
-
