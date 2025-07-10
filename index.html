@@ -106,6 +106,73 @@
 
 <div class="example-container">
   <h3>Basic Conversation</h3>
+  <pre><code>
+let conversationHistory = [];
+const chatInput = document.getElementById('chatInput');
+const sendButton = document.getElementById('sendButton');
+const chatOutput = document.getElementById('chatOutput');
+
+function addMessageToChat(message, role) {
+  const messageElement = document.createElement('div');
+  messageElement.classList.add('chat-message', role);
+  messageElement.textContent = message;
+  chatOutput.appendChild(messageElement);
+  chatOutput.scrollTop = chatOutput.scrollHeight;
+}
+
+// Initial system message to set the AI's persona
+conversationHistory.push({
+  role: "system",
+  content: "You are a friendly and helpful assistant. Keep your responses concise and positive.",
+});
+
+sendButton.addEventListener('click', async () => {
+  const userMessage = chatInput.value.trim();
+  if (!userMessage) return;
+
+  addMessageToChat(userMessage, 'user');
+  chatInput.value = '';
+  sendButton.disabled = true;
+
+  const newMessage = {
+    role: "user",
+    content: userMessage,
+  };
+  conversationHistory.push(newMessage);
+
+  try {
+    const messagesToSend = [
+      conversationHistory[0],
+      ...conversationHistory.slice(-9)
+    ].filter(Boolean);
+
+    const completion = await websim.chat.completions.create({
+      messages: messagesToSend,
+    });
+
+    const aiResponse = completion.content;
+    addMessageToChat(aiResponse, 'ai');
+    conversationHistory.push({
+      role: "assistant",
+      content: aiResponse
+    });
+
+  } catch (error) {
+    console.error("Error communicating with AI:", error);
+    addMessageToChat("Oops! Something went wrong. Please try again.", 'ai');
+  } finally {
+    sendButton.disabled = false;
+  }
+});
+
+chatInput.addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') {
+    sendButton.click();
+  }
+});
+
+addMessageToChat("Hello! How can I help you today?", 'ai');
+  </code></pre>
   <div class="output-area chat-output" id="chatOutput"></div>
   <input type="text" id="chatInput" placeholder="Type your message...">
   <button id="sendButton">Send</button>
@@ -115,6 +182,52 @@
 
 <div class="example-container">
   <h3>Structured Data from Text</h3>
+  <pre><code>
+const jsonInput = document.getElementById('jsonInput');
+const sendJsonButton = document.getElementById('sendJsonButton');
+const jsonOutput = document.getElementById('jsonOutput');
+
+sendJsonButton.addEventListener('click', async () => {
+  const userInput = jsonInput.value.trim();
+  if (!userInput) {
+    jsonOutput.textContent = "Please enter some concepts.";
+    return;
+  }
+
+  sendJsonButton.disabled = true;
+  jsonOutput.textContent = "Generating JSON...";
+
+  try {
+    const completion = await websim.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: `Combine the following concepts into a single, coherent idea.
+Respond directly with JSON, following this JSON schema, and no other text.
+{
+  "concept": string;
+  "emoji": string;
+}`,
+        },
+        {
+          role: "user",
+          content: `concepts: ${userInput}`,
+        },
+      ],
+      json: true,
+    });
+
+    const result = JSON.parse(completion.content);
+    jsonOutput.innerHTML = `<strong>Concept:</strong> ${result.concept}<br><strong>Emoji:</strong> ${result.emoji}`;
+
+  } catch (error) {
+    console.error("Error generating JSON:", error);
+    jsonOutput.textContent = "Error generating JSON. Please try again.";
+  } finally {
+    sendJsonButton.disabled = false;
+  }
+});
+  </code></pre>
   <p>Ask the AI to combine concepts into a JSON object with a concept and an emoji.</p>
   <input type="text" id="jsonInput" placeholder="e.g., 'sun + moon'">
   <button id="sendJsonButton">Get JSON</button>
@@ -125,6 +238,83 @@
 
 <div class="example-container">
   <h3>Analyze Image with JSON</h3>
+  <pre><code>
+const imageFileInput = document.getElementById('imageFileInput');
+const imagePreview = document.getElementById('imagePreview');
+const analyzeImageButton = document.getElementById('analyzeImageButton');
+const imageJsonOutput = document.getElementById('imageJsonOutput');
+let imageDataUrl = null;
+
+imageFileInput.addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      imageDataUrl = e.target.result;
+      imagePreview.src = imageDataUrl;
+      imagePreview.style.display = 'block';
+      analyzeImageButton.disabled = false;
+    };
+    reader.readAsDataURL(file);
+  } else {
+    imageDataUrl = null;
+    imagePreview.src = '';
+    imagePreview.style.display = 'none';
+    analyzeImageButton.disabled = true;
+    imageJsonOutput.textContent = '';
+  }
+});
+
+analyzeImageButton.addEventListener('click', async () => {
+  if (!imageDataUrl) {
+    imageJsonOutput.textContent = "Please select an image first.";
+    return;
+  }
+
+  analyzeImageButton.disabled = true;
+  imageJsonOutput.textContent = "Analyzing image...";
+
+  try {
+    const completion = await websim.chat.completions.create({
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Determine if the image is a natural photograph of an animal.
+Respond directly with JSON, following this JSON schema, and no other text.
+{
+  "isPhotograph": boolean;
+  "isAnimal": boolean;
+  "isInNature": boolean;
+}`,
+            },
+            {
+              type: "image_url",
+              image_url: { url: imageDataUrl },
+            },
+          ],
+        },
+      ],
+      json: true,
+    });
+
+    const result = JSON.parse(completion.content);
+    imageJsonOutput.innerHTML = `
+        <strong>Is Photograph:</strong> ${result.isPhotograph}<br>
+        <strong>Is Animal:</strong> ${result.isAnimal}<br>
+        <strong>Is In Nature:</strong> ${result.isInNature}
+      `;
+
+  } catch (error) {
+    console.error("Error analyzing image:", error);
+    imageJsonOutput.textContent = "Error analyzing image. Please try again.";
+  } finally {
+    analyzeImageButton.disabled = false;
+  }
+});
+  </code></pre>
   <p>Upload an image and ask the AI to determine if it's a natural photograph of an animal.</p>
   <input type="file" id="imageFileInput" accept="image/*">
   <img id="imagePreview" class="image-preview" src="" alt="Image Preview" style="display: none;">
@@ -136,6 +326,47 @@
 
 <div class="example-container">
   <h3>Generate an Image</h3>
+  <pre><code>
+const imageGenInput = document.getElementById('imageGenInput');
+const generateImageButton = document.getElementById('generateImageButton');
+const generatedImage = document.getElementById('generatedImage');
+
+generateImageButton.addEventListener('click', async () => {
+  const prompt = imageGenInput.value.trim();
+  if (!prompt) {
+    generatedImage.style.display = 'none';
+    generatedImage.src = '';
+    alert("Please enter a prompt for the image.");
+    return;
+  }
+
+  generateImageButton.disabled = true;
+  generatedImage.style.display = 'none';
+  generatedImage.src = '';
+  generatedImage.alt = 'Generating...';
+
+  try {
+    generatedImage.style.display = 'block';
+    generatedImage.alt = 'Generating image... Please wait.';
+
+    const result = await websim.imageGen({
+      prompt: prompt,
+      aspect_ratio: "16:9",
+    });
+
+    generatedImage.src = result.url;
+    generatedImage.alt = prompt;
+    generatedImage.style.display = 'block';
+
+  } catch (error) {
+    console.error("Error generating image:", error);
+    generatedImage.style.display = 'none';
+    alert("Error generating image. Please try again.");
+  } finally {
+    generateImageButton.disabled = false;
+  }
+});
+  </code></pre>
   <p>Describe an image you want the AI to create.</p>
   <input type="text" id="imageGenInput" placeholder="e.g., 'a serene forest with a hidden waterfall'">
   <button id="generateImageButton">Generate Image</button>
@@ -146,6 +377,46 @@
 
 <div class="example-container">
   <h3>Convert Text to Audio</h3>
+  <pre><code>
+const ttsInput = document.getElementById('ttsInput');
+const speakButton = document.getElementById('speakButton');
+const ttsAudio = document.getElementById('ttsAudio');
+
+speakButton.addEventListener('click', async () => {
+  const textToSpeak = ttsInput.value.trim();
+  if (!textToSpeak) {
+    ttsAudio.style.display = 'none';
+    ttsAudio.src = '';
+    alert("Please enter some text to speak.");
+    return;
+  }
+
+  speakButton.disabled = true;
+  ttsAudio.style.display = 'none';
+  ttsAudio.src = '';
+
+  try {
+    ttsInput.placeholder = "Generating speech... Please wait.";
+
+    const result = await websim.textToSpeech({
+      text: textToSpeak,
+      voice: "en-male",
+    });
+
+    ttsAudio.src = result.url;
+    ttsAudio.style.display = 'block';
+    ttsAudio.play();
+
+  } catch (error) {
+    console.error("Error generating speech:", error);
+    ttsAudio.style.display = 'none';
+    alert("Error generating speech. Please try again.");
+  } finally {
+    speakButton.disabled = false;
+    ttsInput.placeholder = "e.g., 'Hello, world! How are you today?'";
+  }
+});
+  </code></pre>
   <p>Enter text and hear the AI speak it aloud.</p>
   <input type="text" id="ttsInput" placeholder="e.g., 'Hello, world! How are you today?'">
   <button id="speakButton">Speak</button>
